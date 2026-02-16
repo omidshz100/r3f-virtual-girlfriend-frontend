@@ -125,9 +125,13 @@ export function Avatar(props) {
     setFacialExpression(message.facialExpression);
     setLipsync(message.lipsync);
     const audio = new Audio("data:audio/mp3;base64," + message.audio);
-    audio.play();
+    const playPromise = audio.play();
     setAudio(audio);
     audio.onended = onMessagePlayed;
+    audio.onerror = onMessagePlayed;
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => onMessagePlayed());
+    }
   }, [message]);
 
   const { animations } = useGLTF("/models/animations.glb");
@@ -138,11 +142,17 @@ export function Avatar(props) {
     animations.find((a) => a.name === "Idle") ? "Idle" : animations[0].name // Check if Idle animation exists otherwise use first animation
   );
   useEffect(() => {
-    actions[animation]
+    const action = actions?.[animation];
+    if (!action) {
+      return undefined;
+    }
+
+    action
       .reset()
       .fadeIn(mixer.stats.actions.inUse === 0 ? 0 : 0.5)
       .play();
-    return () => actions[animation].fadeOut(0.5);
+
+    return () => action.fadeOut(0.5);
   }, [animation]);
 
   const lerpMorphTarget = (target, value, speed = 0.1) => {
@@ -201,7 +211,7 @@ export function Avatar(props) {
     }
 
     const appliedMorphTargets = [];
-    if (message && lipsync) {
+    if (message && lipsync && audio) {
       const currentAudioTime = audio.currentTime;
       for (let i = 0; i < lipsync.mouthCues.length; i++) {
         const mouthCue = lipsync.mouthCues[i];
